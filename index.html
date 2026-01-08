@@ -274,7 +274,6 @@
                 btn.addEventListener('click', () => {
                     btns.forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
-                    // This updates the hidden input that EmailJS actually reads
                     document.getElementById(inputId).value = btn.getAttribute('data-val');
                     weights[weightKey] = parseInt(btn.getAttribute('data-weight'));
                     updateProgressBar();
@@ -288,7 +287,7 @@
 
         document.querySelectorAll('.step-input').forEach(input => {
             input.addEventListener('input', () => {
-                weights.inputs = 25; // Simple weight for completing text fields
+                weights.inputs = 25; 
                 updateProgressBar();
             });
         });
@@ -333,17 +332,50 @@
         }
         type();
 
+        // FIXED FORM SUBMISSION LOGIC
         document.getElementById('elite-lead-form').onsubmit = function(e) {
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
+            const formData = this;
+            
             btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> TRANSMITTING...`;
             btn.disabled = true;
 
-            emailjs.sendForm('service_9tr0gh9', 'template_p12gr97', this)
+            // 1. Send to EmailJS First
+            emailjs.sendForm('service_9tr0gh9', 'template_p12gr97', formData)
                 .then(() => {
-                    document.getElementById('successOverlay').style.display = 'flex';
-                }, (error) => {
-                    alert("Submission failed. Check your EmailJS Template IDs.");
+                    // 2. Then Send to Google Sheet (SheetDB)
+                    return fetch('https://sheetdb.io/api/v1/4idta56atf6ls', {
+                        method: 'POST',
+                        headers: {
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            data: [
+                                {
+                                    'Name': formData.user_name.value,
+                                    'Email': formData.user_email.value,
+                                    'Type': formData.project_type.value,
+                                    'Timeline': formData.timeline.value,
+                                    'Budget': formData.budget.value,
+                                    'Message': formData.message.value
+                                }
+                            ]
+                        })
+                    });
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // 3. Show Success Overlay
+                        document.getElementById('successOverlay').style.display = 'flex';
+                    } else {
+                        throw new Error('SheetDB Error');
+                    }
+                })
+                .catch((error) => {
+                    console.error("Error:", error);
+                    alert("Submission failed. Check your internet or SheetDB setup.");
                     btn.disabled = false;
                     btn.innerHTML = `RETRY SUBMISSION`;
                 });
